@@ -1,0 +1,38 @@
+# Build & Release Artifacts
+build/
+build_*/
+build*
+dist/
+dist*
+*.3dsx
+*.cia
+*.elf
+*.smdh
+*.o
+*.obj
+*.d
+*.pdb
+*.exe
+*.log
+*.zip
+
+# Game Data & Assets (disc-extracted, runtime converted)
+game_data/
+*/game_data/
+capturas/
+*/capturas/
+*.bin
+*.cue
+*.iso
+*.img
+
+# External Tools & Environments
+duckstation/
+.agents/
+.swarm/
+*/.swarm/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class

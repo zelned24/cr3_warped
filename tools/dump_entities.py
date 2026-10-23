@@ -1,0 +1,197 @@
+"""Extract authentic level entities from Crash Bandicoot: Warped PS1 disc.
+Produces source/level_entities.h containing exact crate, crystal, enemy, and portal
+coordinates for all 32 playable levels.
+"""
+import os
+import struct
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import cb3
+import zdat
+
+ISO = r"C:\Users\operacion02\AppData\Local\Temp\opencode\cbwarped_iso"
+OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "source", "level_entities.h")
+
+# Map of raw object names to port PropType
+PROP_MAP = {
+    # Crates
+    "empty": "PROP_CRATE_WOOD",
+    "pickup": "PROP_CRATE_PICKUP",
+    "fruit": "PROP_CRATE_BOUNCE",
+    "doctor": "PROP_CRATE_AKU",
+    "continue": "PROP_CRATE_CHECKPOINT",
+    "spring": "PROP_CRATE_SPRING",
+    "tnt": "PROP_CRATE_TNT",
+    "nitro": "PROP_CRATE_NITRO",
+    "slot": "PROP_CRATE_SLOT",
+    "life": "PROP_CRATE_LIFE",
+    "switch": "PROP_CRATE_SWITCH",
+    # Pickups & Objectives
+    "crystal": "PROP_CRYSTAL",
+    "clock": "PROP_TIME_CLOCK",
+    "warp_out": "PROP_EXIT_PORTAL",
+    # Common enemies
+    "willy": "PROP_ENEMY_KNIGHT",
+    "chicken": "PROP_ENEMY_CHICKEN",
+    "goat": "PROP_ENEMY_GOAT",
+    "frog": "PROP_ENEMY_FROG",
+    "swallup": "PROP_ENEMY_SWORD",
+    "diver": "PROP_ENEMY_DIVER",
+    "mummy": "PROP_ENEMY_MUMMY",
+    "scorpion": "PROP_ENEMY_SCORPION",
+    "wizard": "PROP_ENEMY_WIZARD",
+    "robot": "PROP_ENEMY_ROBOT",
+}
+
+BUTTON_MAP = {
+    "obj_button1": 0x0B, "obj_button2": 0x0E, "obj_button3": 0x0A, "obj_button4": 0x0C, "obj_button5": 0x19,
+    "obj_buttonb1": 0x06,
+    "obj_button6": 0x0F, "obj_button7": 0x16, "obj_button8": 0x15, "obj_button9": 0x12, "obj_button10": 0x11,
+    "obj_buttonb2": 0x03,
+    "obj_button11": 0x10, "obj_button12": 0x1C, "obj_button13": 0x1A, "obj_button14": 0x14, "obj_button15": 0x1D,
+    "obj_buttonb3": 0x04,
+    "obj_button16": 0x1E, "obj_button17": 0x13, "obj_button18": 0x0D, "obj_button19": 0x1B, "obj_button20": 0x18,
+    "obj_buttonb4": 0x05,
+    "obj_button21": 0x23, "obj_button22": 0x20, "obj_button23": 0x22, "obj_button24": 0x17, "obj_button25": 0x24,
+    "obj_buttonb5": 0x07,
+    "obj_button_s1": 0x21, "obj_button_s2": 0x16, "obj_button_s3": 0x25, "obj_button_s4": 0x1B, "obj_button_s5": 0x1F, "obj_button_s6": 0x27
+}
+
+def classify_entity(name):
+    if name in BUTTON_MAP:
+        return "PROP_WARP_PORTAL", BUTTON_MAP[name]
+    lower = name.lower()
+    if "box" in lower:
+        if "clock" in lower:
+            return "PROP_TIME_CLOCK", 0
+        if "counter" in lower:
+            return None, 0
+        for k, v in PROP_MAP.items():
+            if k in lower:
+                return v, 1
+        return "PROP_CRATE_WOOD", 1
+    elif "crystal" in lower:
+        return "PROP_CRYSTAL", 0
+    elif "warp_out" in lower or "goal" in lower:
+        return "PROP_EXIT_PORTAL", 0
+    elif "fruit" in lower:
+        return "PROP_WUMPA", 1
+    for k, v in PROP_MAP.items():
+        if k in lower:
+            return v, 0
+    return None, 0
+
+def extract_all():
+    levels = []
+    for folder in ("S0", "S1", "S2", "S3"):
+        fdir = os.path.join(ISO, folder)
+        if not os.path.isdir(fdir):
+            continue
+        for name in sorted(os.listdir(fdir)):
+            if name.endswith(".NSF"):
+                levels.append((int(name[1:-4], 16), folder, name[:-4]))
+
+    level_entities = {}
+
+    for lid, folder, stem in sorted(levels):
+        nsf_p = os.path.join(ISO, folder, stem + ".NSF")
+        nsd_p = os.path.join(ISO, folder, stem + ".NSD")
+        if not os.path.exists(nsf_p):
+            continue
+        try:
+            ar = cb3.Archive(nsf_p, nsd_p)
+            zdats = zdat.parse_zdat_archive(ar)
+        except Exception as e:
+            print(f"Error parsing 0x{lid:02X}: {e}")
+            continue
+
+        ents = []
+        for z in zdats:
+            for o in z.objects:
+                ptype, val = classify_entity(o.name)
+                if not ptype:
+                    continue
+                if not o.positions:
+                    continue
+                pos = o.positions[0]
+                x = pos[0] / 4096.0
+                y = pos[1] / 4096.0
+                z_coord = pos[2] / 4096.0
+                ents.append({
+                    "name": o.name,
+                    "type": ptype,
+                    "x": x,
+                    "y": y,
+                    "z": z_coord,
+                    "value": val
+                })
+
+        # Sort along track: main track has higher Z to lower Z, or by Z
+        ents.sort(key=lambda e: -e["z"])
+        level_entities[lid] = ents
+        crate_count = sum(1 for e in ents if "CRATE" in e["type"])
+        print(f"Level 0x{lid:02X} {stem:10s}: {len(ents):3d} entities ({crate_count:3d} crates)")
+
+    return level_entities
+
+def write_header(level_entities):
+    out = []
+    out.append("/* Auto-generated by tools/dump_entities.py from retail PS1 disc. */")
+    out.append("#ifndef LEVEL_ENTITIES_H")
+    out.append("#define LEVEL_ENTITIES_H")
+    out.append("")
+    out.append('#include "props.h"')
+    out.append("")
+    out.append("typedef struct {")
+    out.append("    float x, y, z;")
+    out.append("    PropType type;")
+    out.append("    int value;")
+    out.append("} level_entity_def;")
+    out.append("")
+
+    all_lids = sorted(level_entities.keys())
+    for lid in all_lids:
+        ents = level_entities[lid]
+        if not ents:
+            continue
+        out.append(f"static const level_entity_def s_entities_lvl_{lid:02x}[] = {{")
+        for e in ents:
+            out.append(f"    {{ {e['x']:.2f}f, {e['y']:.2f}f, {e['z']:.2f}f, {e['type']}, {e['value']} }}, /* {e['name']} */")
+        out.append("};")
+        out.append("")
+
+    out.append("typedef struct {")
+    out.append("    int level_id;")
+    out.append("    const level_entity_def *entities;")
+    out.append("    int count;")
+    out.append("} level_entity_table_entry;")
+    out.append("")
+    out.append("static const level_entity_table_entry s_level_entity_table[] = {")
+    for lid in all_lids:
+        ents = level_entities[lid]
+        if ents:
+            out.append(f"    {{ 0x{lid:02X}, s_entities_lvl_{lid:02x}, sizeof(s_entities_lvl_{lid:02x}) / sizeof(s_entities_lvl_{lid:02x}[0]) }},")
+        else:
+            out.append(f"    {{ 0x{lid:02X}, NULL, 0 }},")
+    out.append("};")
+    out.append("")
+    out.append("static const int s_level_entity_table_count = sizeof(s_level_entity_table) / sizeof(s_level_entity_table[0]);")
+    out.append("")
+    out.append("static inline const level_entity_table_entry *level_entities_find(int level_id) {")
+    out.append("    for (int i = 0; i < s_level_entity_table_count; i++) {")
+    out.append("        if (s_level_entity_table[i].level_id == level_id)")
+    out.append("            return &s_level_entity_table[i];")
+    out.append("    }")
+    out.append("    return NULL;")
+    out.append("}")
+    out.append("")
+    out.append("#endif /* LEVEL_ENTITIES_H */\n")
+
+    with open(OUT, "w") as f:
+        f.write("\n".join(out))
+    print(f"Wrote {OUT} ({len(all_lids)} levels)")
+
+if __name__ == "__main__":
+    entities = extract_all()
+    write_header(entities)

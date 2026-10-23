@@ -1,0 +1,630 @@
+/* Crash Bandicoot: Warped (PS1) -> Nintendo 3DS homebrew port.
+ *
+ * The level geometry, colour palettes and layout come straight out of the
+ * original PlayStation disc (Naughty Dog's NSF archives); this program
+ * re-implements the renderer, camera and character controller on top of them
+ * with citro3d.
+ *
+ * Target: original Nintendo 3DS (2GB VRAM, 32 MB application memory).
+ */
+#include <3ds.h>
+#include <citro3d.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
+#include "level.h"
+#include "char.h"
+#include "font_data.h"
+#include "shader_shbin.h"
+#define AUTO_LOAD 1
+#define DEBUG_TOPDOWN 1
+
+#define SCREEN_W 400
+#define SCREEN_H 240
+
+#define CLEAR_COLOR 0x1A2030FF
+
+/* ------------------------------------------------------------------ */
+/* level names (original Crash 3 level codes)                          */
+/* ------------------------------------------------------------------ */
+
+static const char *const level_names[64] = {
+    "-", "-", "WARP ROOM", "DINGODILE", "N. TROPY", "N. GIN", "TINY",
+    "DR. NEO CORTEX", "-", "-", "ORIENT EXPRESS", "TOAD VILLAGE",
+    "BONE YARD", "TELL NO TALES", "UNDER PRESSURE", "GEE WIZ",
+    "DINO MIGHT", "MIDNIGHT RUN", "TOMB TIME", "BYE BYE BLIMPS",
+    "ROAD CRASH", "HOG RIDE", "HANG'EM HIGH", "MAD BOMBERS", "TOMB WADER",
+    "MAKIN' WAVES", "HIGH TIME", "FUTURE FRENZY", "DEEP TROUBLE",
+    "DOUBLE HEADER", "SPHYNXINATOR", "RINGS OF POWER", "ORANGE ASPHALT",
+    "SKI CRAZED", "FLAMING PASSION", "GONE TOMORROW", "BUG LITE",
+    "AREA 51", "EGGIPUS REX", "HOT COCO", "OPENING CUTSCENE",
+    "ANY% ENDING", "100% ENDING", "-", "-", "-", "-", "-", "-", "-", "-",
+    "-", "-", "-", "-", "-", "-", "-", "INTERMISSION VORTEX", "GAME OVER",
+    "TITLE SCREEN", "-", "-", "-"
+};
+
+/* ------------------------------------------------------------------ */
+/* graphics state                                                      */
+/* ------------------------------------------------------------------ */
+
+static DVLB_s *s_vshader_dvlb;
+static shaderProgram_s s_program;
+static int s_uLoc_projection;
+static int s_uLoc_modelView;
+static C3D_RenderTarget *s_target;
+
+static C3D_Mtx s_projection;
+static C3D_Mtx s_ortho;
+
+/* Vertex buffers have to live in VRAM (the GPU can only read buffers whose
+ * physical address is at or above 0x18000000), so they are allocated from
+ * the linear heap rather than declared as statics. */
+static level_vertex *s_charbuf;
+static level_vertex *s_textbuf;
+static int s_textn;
+
+static char_state s_player;
+
+/* ------------------------------------------------------------------ */
+/* text rendering                                                      */
+/* ------------------------------------------------------------------ */
+
+static void text_reset(void)
+{
+    s_textn = 0;
+}
+
+static void text_glyph(int x, int y, int scale, int glyph, float r, float g, float b)
+{
+    if (glyph < 0 || glyph >= FONT_GLYPH_COUNT)
+        return;
+    for (int col = 0; col < FONT_W; col++) {
+        uint8_t bits = font_glyphs[glyph][col];
+        for (int row = 0; row < FONT_H; row++) {
+            if (!(bits & (1u << row)))
+                continue;
+            if (s_textn + 6 > (int)(24000))
+                return;
+            float x0 = (float)(x + col * scale);
+            /* the GPU's Y axis points up, the HUD is written top-down */
+            float gy = (float)SCREEN_H - ((float)y + (float)row * (float)scale);
+            static const int order[6] = { 0, 1, 2, 0, 2, 3 };
+            static const float px[4] = { 0, 1, 1, 0 };
+            static const float py[4] = { 0, 0, 1, 1 };
+            for (int i = 0; i < 6; i++) {
+                level_vertex *v = &s_textbuf[s_textn++];
+                v->x = x0 + px[order[i]] * (float)scale;
+                v->y = gy - py[order[i]] * (float)scale;
+                v->z = 0.0f;
+                v->r = r; v->g = g; v->b = b;
+            }
+        }
+    }
+}
+
+static int text_draw(int x, int y, int scale, const char *s, float r, float g, float b)
+{
+    int cx = x;
+    for (; *s; s++) {
+        char ch = *s;
+        int glyph = 0;
+        if (ch >= 32 && ch < 128)
+            glyph = font_index[ch - 32];
+        if (ch == ' ')
+            cx += (FONT_W + 1) * scale;
+        else {
+            text_glyph(cx, y, scale, glyph, r, g, b);
+            cx += (FONT_W + 1) * scale;
+        }
+    }
+    return cx;
+}
+
+/* ------------------------------------------------------------------ */
+/* scene setup                                                         */
+/* ------------------------------------------------------------------ */
+
+static void sceneInit(void)
+{
+    s_vshader_dvlb = DVLB_ParseFile((u32 *)shader_shbin, shader_shbin_size);
+    shaderProgramInit(&s_program);
+    shaderProgramSetVsh(&s_program, &s_vshader_dvlb->DVLE[0]);
+    C3D_BindProgram(&s_program);
+
+    s_uLoc_projection = shaderInstanceGetUniformLocation(s_program.vertexShader, "projection");
+    s_uLoc_modelView  = shaderInstanceGetUniformLocation(s_program.vertexShader, "modelView");
+    printf("[crash3ds] shader ok (projection=%d modelView=%d)\n",
+           s_uLoc_projection, s_uLoc_modelView);
+
+    /* two generic attributes: position (float3) and colour (float3) */
+    C3D_AttrInfo *attrInfo = C3D_GetAttrInfo();
+    AttrInfo_Init(attrInfo);
+    AttrInfo_AddLoader(attrInfo, 0, GPU_FLOAT, 3);   /* v0 = position */
+    AttrInfo_AddLoader(attrInfo, 1, GPU_FLOAT, 3);   /* v1 = colour   */
+
+    Mtx_OrthoTilt(&s_ortho, 0.0f, SCREEN_W, 0.0f, SCREEN_H, 0.0f, 1.0f, true);
+
+    /* pass the vertex colour straight through to the framebuffer */
+    C3D_TexEnv *env = C3D_GetTexEnv(0);
+    C3D_TexEnvInit(env);
+    C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR, 0, 0);
+    C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
+
+    s_charbuf = (level_vertex *)linearAlloc(1024 * sizeof(level_vertex));
+    s_textbuf = (level_vertex *)linearAlloc(24000 * sizeof(level_vertex));
+    if (!s_charbuf || !s_textbuf)
+        printf("[crash3ds] FATAL: out of VRAM\n");
+}
+
+static void bind_mesh(const level_vertex *verts, int count)
+{
+    if (count <= 0)
+        return;
+    C3D_BufInfo *bufInfo = C3D_GetBufInfo();
+    BufInfo_Init(bufInfo);
+    /* data, stride, attribute count, attribute permutation */
+    BufInfo_Add(bufInfo, (void *)verts, sizeof(level_vertex), 2, 0x10);
+}
+
+static void draw_mesh(const level_vertex *verts, int count)
+{
+    if (count <= 0)
+        return;
+    bind_mesh(verts, count);
+    C3D_DrawArrays(GPU_TRIANGLES, 0, count);
+}
+
+/* ------------------------------------------------------------------ */
+/* game state                                                          */
+/* ------------------------------------------------------------------ */
+
+static int s_state = 0;          /* 0 = menu, 1 = playing */
+static int s_menu_index;
+static float s_cam_yaw = 0.0f;
+static float s_cam_pitch = -0.55f;
+static float s_cam_dist = 900.0f;
+static int s_loaded_id = -1;
+static int s_cur_model = 0;
+static int s_fps_frames;
+static int s_fps_count;
+static float s_fps_time;
+
+static void spawn_player(void)
+{
+    /* the world is split into "zones" (one world model each); the player
+     * starts inside the busiest one */
+    int best = 0;
+    uint32_t best_count = 0;
+    int n = level_model_count();
+    for (int i = 0; i < n; i++) {
+        const level_model_info *m = level_model(i);
+        if (m && m->count > best_count) {
+            best_count = m->count;
+            best = i;
+        }
+    }
+    s_cur_model = best;
+
+    const level_model_info *m = level_model(best);
+    float cx = 0.0f, cz = 0.0f;
+    if (m) {
+        cx = (m->minx + m->maxx) * 0.5f;
+        cz = (m->minz + m->maxz) * 0.5f;
+    } else {
+        float minx, miny, minz, maxx, maxy, maxz;
+        level_bounds(&minx, &miny, &minz, &maxx, &maxy, &maxz);
+        cx = (minx + maxx) * 0.5f;
+        cz = (minz + maxz) * 0.5f;
+    }
+
+    /* look for a spot with ground, but stay inside the zone */
+    float y = -1000000.0f;
+    for (int r = 0; r < 300 && y < -999999; r++) {
+        float step = 16.0f * (float)r;
+        for (int a = 0; a < 16; a++) {
+            float ang = (float)a * 0.39269908f;
+            float tx = cx + cosf(ang) * step;
+            float tz = cz + sinf(ang) * step;
+            if (m && (tx < m->minx || tx > m->maxx || tz < m->minz || tz > m->maxz))
+                continue;
+            int h = level_height(tx, tz);
+            if (h > -999999) {
+                y = (float)h;
+                cx = tx;
+                cz = tz;
+                break;
+            }
+        }
+    }
+    if (y < -999999) {
+        /* no ground found: use the middle of the zone */
+        y = m ? (m->miny + m->maxy) * 0.5f : 0.0f;
+    }
+    memset(&s_player, 0, sizeof(s_player));
+    s_player.x = cx;
+    s_player.y = y;
+    s_player.z = cz;
+    s_player.onground = 1;
+}
+
+static int load_level_by_index(int idx)
+{
+    const level_info *info = level_get(idx);
+    if (!info)
+        return -1;
+    printf("[crash3ds] loading level 0x%02X (%u bytes)\n", info->id, info->size);
+    if (level_load(info->id) != 0) {
+        printf("[crash3ds] level_load FAILED for 0x%02X\n", info->id);
+        return -1;
+    }
+    s_loaded_id = (int)info->id;
+    spawn_player();
+    printf("[crash3ds] level 0x%02X ok: %d verts, %d models, player %.0f %.0f %.0f\n",
+           info->id, level_vertex_count(), level_model_count(),
+           s_player.x, s_player.y, s_player.z);
+    return 0;
+}
+
+static int next_available(int from, int dir)
+{
+    int n = level_count();
+    if (n <= 0)
+        return -1;
+    for (int i = 1; i <= n; i++) {
+        int j = ((from + dir * i) % n + n) % n;
+        if (level_get(j))
+            return j;
+    }
+    return -1;
+}
+
+/* ------------------------------------------------------------------ */
+/* update                                                              */
+/* ------------------------------------------------------------------ */
+
+static void update_player(float dt)
+{
+    circlePosition cp;
+    hidCircleRead(&cp);
+
+    float move = 0.0f, strafe = 0.0f;
+    if (cp.dx > 24 || cp.dx < -24)
+        strafe = (float)cp.dx / 150.0f;
+    if (cp.dy > 24 || cp.dy < -24)
+        move = -(float)cp.dy / 150.0f;
+    if (move > 1.0f) move = 1.0f;
+    if (move < -1.0f) move = -1.0f;
+    if (strafe > 1.0f) strafe = 1.0f;
+    if (strafe < -1.0f) strafe = -1.0f;
+
+    float speed = 260.0f;
+    float fx = sinf(s_cam_yaw), fz = cosf(s_cam_yaw);
+    float rx = cosf(s_cam_yaw), rz = -sinf(s_cam_yaw);
+    float tx = fx * move + rx * strafe;
+    float tz = fz * move + rz * strafe;
+    float tl = sqrtf(tx * tx + tz * tz);
+    if (tl > 1.0f) { tx /= tl; tz /= tl; tl = 1.0f; }
+
+    float accel = s_player.onground ? 1400.0f : 500.0f;
+    s_player.vx += tx * speed * accel * dt;
+    s_player.vz += tz * speed * accel * dt;
+
+    float damp = s_player.onground ? 9.0f : 1.0f;
+    s_player.vx -= s_player.vx * damp * dt;
+    s_player.vz -= s_player.vz * damp * dt;
+    float sp = sqrtf(s_player.vx * s_player.vx + s_player.vz * s_player.vz);
+    if (sp > speed)
+    {
+        s_player.vx = s_player.vx / sp * speed;
+        s_player.vz = s_player.vz / sp * speed;
+    }
+
+    s_player.x += s_player.vx * dt;
+    s_player.z += s_player.vz * dt;
+
+    if (sp > 12.0f) {
+        float want = atan2f(s_player.vx, s_player.vz);
+        float d = want - s_player.yaw;
+        while (d > 3.14159265f) d -= 6.28318531f;
+        while (d < -3.14159265f) d += 6.28318531f;
+        s_player.yaw += d * (1.0f - expf(-12.0f * dt));
+    }
+
+    s_player.vy -= 1500.0f * dt;
+    if (s_player.onground && (hidKeysDown() & KEY_A))
+        s_player.vy = 520.0f;
+
+    s_player.y += s_player.vy * dt;
+
+    int ground = level_height(s_player.x, s_player.z);
+    if (ground > -999999 && s_player.y <= (float)ground) {
+        s_player.y = (float)ground;
+        s_player.vy = 0.0f;
+        s_player.onground = 1;
+    } else {
+        s_player.onground = 0;
+    }
+
+    float want_walk = sp / 150.0f * 6.0f;
+    s_player.walk += want_walk * dt * 6.0f;
+    if (s_player.walk > 6.28318531f * 64.0f)
+        s_player.walk -= 6.28318531f * 64.0f;
+}
+
+static void update_camera(void)
+{
+    touchPosition touch;
+    static int dragging = 0;
+    static touchPosition last;
+
+    if (0) {
+        hidTouchRead(&touch);
+        if (!dragging) {
+            dragging = 1;
+            last = touch;
+        } else {
+            float dx = (float)(touch.px - last.px);
+            float dy = (float)(touch.py - last.py);
+            s_cam_yaw += dx * 0.012f;
+            s_cam_pitch += dy * 0.008f;
+            if (s_cam_pitch < -1.2f) s_cam_pitch = -1.2f;
+            if (s_cam_pitch > 0.9f) s_cam_pitch = 0.9f;
+            last = touch;
+        }
+    } else {
+        dragging = 0;
+    }
+
+    if (hidKeysHeld() & KEY_DLEFT)  s_cam_yaw -= 2.0f * (1.0f / 60.0f);
+    if (hidKeysHeld() & KEY_DRIGHT) s_cam_yaw += 2.0f * (1.0f / 60.0f);
+    if (hidKeysHeld() & KEY_DUP)    s_cam_pitch += 1.2f * (1.0f / 60.0f);
+    if (hidKeysHeld() & KEY_DDOWN)  s_cam_pitch -= 1.2f * (1.0f / 60.0f);
+    if (s_cam_pitch < -1.2f) s_cam_pitch = -1.2f;
+    if (s_cam_pitch > 0.9f) s_cam_pitch = 0.9f;
+}
+
+/* ------------------------------------------------------------------ */
+/* render                                                              */
+/* ------------------------------------------------------------------ */
+
+static void build_view(C3D_Mtx *mv)
+{
+    float tx = s_player.x;
+    float ty = s_player.y + 55.0f;
+    float tz = s_player.z;
+
+    Mtx_Identity(mv);
+    Mtx_Translate(mv, 0.0f, 0.0f, -s_cam_dist, true);
+    Mtx_RotateX(mv, -s_cam_pitch, true);
+    Mtx_RotateY(mv, -s_cam_yaw, true);
+    Mtx_Translate(mv, -tx, -ty, -tz, true);
+}
+
+static void render_world(C3D_Mtx *mv)
+{
+    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, s_uLoc_modelView, mv);
+
+    /* only the zone the player is in is kept in VRAM */
+    const level_model_info *cur = level_model(s_cur_model);
+    if (cur && (s_player.x < cur->minx || s_player.x > cur->maxx ||
+                s_player.z < cur->minz || s_player.z > cur->maxz)) {
+        int here = level_model_at(s_player.x, s_player.z);
+        if (here >= 0 && here != s_cur_model) {
+            if (level_activate_zone(here) == 0)
+                s_cur_model = here;
+        }
+    }
+
+    draw_mesh(level_vertices(), level_vertex_count());
+
+#ifdef DEBUG_TOPDOWN
+    {
+        const level_model_info *m = level_model(s_cur_model);
+        if (m) {
+            level_vertex *v = (level_vertex *)level_vertices();
+            int n = level_vertex_count();
+            for (int i = 0; i < n; i += 997) { v[i].r = 1.0f; v[i].g = 0.2f; v[i].b = 0.9f; }
+            C3D_Mtx o2, id;
+            Mtx_OrthoTilt(&o2, m->minx, m->maxx, m->minz, m->maxz, -1.0f, 1.0f, true);
+            Mtx_Identity(&id);
+            C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, s_uLoc_projection, &o2);
+            C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, s_uLoc_modelView, &id);
+            C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALL);
+            draw_mesh(level_vertices(), level_vertex_count());
+            C3D_DepthTest(true, GPU_GREATER, GPU_WRITE_ALL);
+            /* report the first vertex colour */
+            char dbg[64];
+            snprintf(dbg, sizeof(dbg), "C%0.2f %0.2f %0.2f", v[0].r, v[0].g, v[0].b);
+            text_draw(4, SCREEN_H - 26, 1, dbg, 1.0f, 1.0f, 1.0f);
+        }
+    }
+#endif
+}
+
+static void render_char(C3D_Mtx *mv)
+{
+    int n = char_build(s_charbuf, 1024, &s_player);
+    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, s_uLoc_modelView, mv);
+    draw_mesh(s_charbuf, n);
+}
+
+static void render_text(void)
+{
+    if (s_textn == 0)
+        return;
+    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, s_uLoc_projection, &s_ortho);
+    C3D_Mtx mv;
+    Mtx_Identity(&mv);
+    C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, s_uLoc_modelView, &mv);
+    C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALL);
+    draw_mesh(s_textbuf, s_textn);
+    C3D_DepthTest(true, GPU_GREATER, GPU_WRITE_ALL);
+}
+
+static void draw_menu(void)
+{
+    text_reset();
+    text_draw(120, 14, 3, "CRASH BANDICOOT", 0.973f, 0.753f, 0.188f);
+    text_draw(132, 40, 3, "WARPED  3DS PORT", 0.878f, 0.878f, 0.910f);
+
+    int n = level_count();
+    int first = s_menu_index - 5;
+    for (int i = 0; i < 10; i++) {
+        int idx = first + i;
+        if (idx < 0 || idx >= n)
+            continue;
+        const level_info *info = level_get(idx);
+        char line[48];
+        char name[40];
+        const char *nm = level_names[info->id & 0x3F];
+        int k = 0;
+        for (const char *p = nm; *p && k < 38; p++)
+            name[k++] = *p;
+        name[k] = 0;
+        snprintf(line, sizeof(line), "%c %s", level_code(info->id), name);
+        int sel = (idx == s_menu_index);
+        text_draw(40, 70 + i * 15, 2, line,
+                  sel ? 0.188f : 1.0f, sel ? 0.973f : 0.627f, sel ? 0.188f : 0.627f);
+    }
+    text_draw(40, 226, 1, "A: PLAY    START: EXIT", 0.753f, 0.753f, 0.816f);
+    C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALL);
+    render_text();
+    C3D_DepthTest(true, GPU_GREATER, GPU_WRITE_ALL);
+}
+
+static void draw_hud(void)
+{
+    text_reset();
+    char line[64];
+    const char *nm = level_names[s_loaded_id & 0x3F];
+    snprintf(line, sizeof(line), "%c %s", level_code(s_loaded_id), nm);
+    text_draw(4, 4, 2, line, 1.0f, 0.878f, 0.251f);
+    snprintf(line, sizeof(line), "%d FPS", s_fps_frames);
+    text_draw(SCREEN_W - 60, 4, 2, line, 0.627f, 0.816f, 1.0f);
+#ifdef DEBUG_TOPDOWN
+    {
+        const level_vertex *v = level_vertices();
+        const level_model_info *m = level_model(s_cur_model);
+        if (v && m) {
+            snprintf(line, sizeof(line), "V%d X%.0f %.0f %.0f", level_vertex_count(),
+                     v[0].x, v[0].y, v[0].z);
+            text_draw(4, SCREEN_H - 14, 1, line, 0.5f, 0.9f, 0.7f);
+            snprintf(line, sizeof(line), "C%.2f %.2f %.2f  B%.0f %.0f %.0f",
+                     v[0].r, v[0].g, v[0].b, m->minx, m->miny, m->minz);
+            text_draw(4, SCREEN_H - 26, 1, line, 0.9f, 0.7f, 0.5f);
+            snprintf(line, sizeof(line), "VBO%d A%06X Z%d F%d", level_debug(0), level_debug(1), level_debug(2), level_debug(3));
+            text_draw(4, SCREEN_H - 38, 1, line, 0.9f, 0.5f, 0.9f);
+        }
+    }
+#endif
+    text_draw(SCREEN_W - 110, 18, 2, line, 0.627f, 0.816f, 1.0f);
+    text_draw(4, SCREEN_H - 12, 1,
+              "CIRCLE PAD: MOVE   TOUCH: CAMERA   A: JUMP   START: MENU",
+              0.753f, 0.753f, 0.816f);
+    render_text();
+}
+
+/* ------------------------------------------------------------------ */
+/* main                                                                */
+/* ------------------------------------------------------------------ */
+
+int main(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+
+    gfxInitDefault();
+    C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
+
+    s_target = C3D_RenderTargetCreate(240, 400, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
+    C3D_RenderTargetSetOutput(s_target, GFX_TOP, GFX_LEFT,
+        (GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) |
+         GX_TRANSFER_RAW_COPY(0) | GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGBA8) |
+         GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGB8) |
+         GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO)));
+
+    sceneInit();
+
+    C3D_DepthTest(true, GPU_GREATER, GPU_WRITE_ALL);
+    C3D_CullFace(GPU_CULL_NONE);
+
+    Mtx_PerspStereoTilt(&s_projection, C3D_AngleFromDegrees(60.0f),
+                        C3D_AspectRatioTop, 8.0f, 60000.0f, 0.0f, 2.0f, false);
+
+    int first = -1;
+    for (int i = 0; i < level_count(); i++) {
+        const level_info *info = level_get(i);
+        if (info && info->id == 0x0B) { first = i; break; }
+    }
+    if (first < 0)
+        first = 0;
+    s_menu_index = first;
+
+#ifdef AUTO_LOAD
+    if (load_level_by_index(s_menu_index) == 0)
+        s_state = 1;
+#endif
+
+    while (aptMainLoop()) {
+        hidScanInput();
+        u32 kDown = hidKeysDown();
+
+        if (kDown & KEY_START) {
+            if (s_state == 1)
+                s_state = 0;
+            else
+                break;
+        }
+
+        if (s_state == 0) {
+            int n = level_count();
+            if (kDown & KEY_DLEFT)  s_menu_index = (s_menu_index - 1 + n) % n;
+            if (kDown & KEY_DRIGHT) s_menu_index = (s_menu_index + 1) % n;
+            if (kDown & KEY_A) {
+                if (load_level_by_index(s_menu_index) == 0)
+                    s_state = 1;
+            }
+        } else {
+            if (kDown & KEY_L) {
+                int n = next_available(s_menu_index, -1);
+                if (n >= 0) { s_menu_index = n; load_level_by_index(n); }
+            }
+            if (kDown & KEY_R) {
+                int n = next_available(s_menu_index, 1);
+                if (n >= 0) { s_menu_index = n; load_level_by_index(n); }
+            }
+            update_camera();
+            update_player(1.0f / 60.0f);
+        }
+
+        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+            C3D_RenderTargetClear(s_target, C3D_CLEAR_ALL, CLEAR_COLOR, 0);
+            C3D_FrameDrawOn(s_target);
+            if (s_state == 1) {
+                C3D_Mtx mv;
+                build_view(&mv);
+                C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, s_uLoc_projection, &s_projection);
+                render_world(&mv);
+                render_char(&mv);
+                draw_hud();
+            } else {
+                C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, s_uLoc_projection, &s_ortho);
+                draw_menu();
+            }
+        C3D_FrameEnd(0);
+
+        s_fps_count++;
+        u64 now = osGetTime();
+        if (now - (u64)s_fps_time > 1000000000ULL) {
+            s_fps_frames = s_fps_count;
+            s_fps_count = 0;
+            s_fps_time = (float)now;
+        }
+    }
+
+    level_unload();
+    C3D_Fini();
+    gfxExit();
+    return 0;
+}

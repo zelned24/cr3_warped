@@ -1,0 +1,300 @@
+{
+  "schema": "psx-gool-trig-native/1",
+  "analysis": "offline-capstone-static-and-integer-fixture-replay",
+  "source_sha256": "1b93cc563c90966e1d79b750f7d19bc1662859cceeb991775e9e9a22656d71d1",
+  "source_file_size": 333824,
+  "quarter_wave": {
+    "address": 2147862812,
+    "entries": 1025,
+    "type": "little-endian signed int16",
+    "sha256": "bab3b71ba7f79dfb2b5cebb71f8382a79606a958d72031bc11b88066c36033bd",
+    "raw_hex": "000006000d00130019001f0026002c00320039003f0045004b00520058005e0065006b00710077007e0084008a00900097009d00a300aa00b000b600bc00c300c900cf00d600dc00e200e800ef00f500fb00010108010e0114011b01210127012d0134013a01400146014d01530159015f0166016c01720178017f0185018b01910198019e01a401aa01b101b701bd01c301ca01d001d601dc01e301e901ef01f501fc01020208020e0215021b02210227022d0234023a02400246024d02530259025f0265026c02720278027e0284028b02910297029d02a302aa02b002b602bc02c202c902cf02d502db02e102e802ee02f402fa02000306030d03130319031f0325032b03320338033e0344034a03500356035d03630369036f0375037b03810388038e0394039a03a003a603ac03b203b903bf03c503cb03d103d703dd03e303e903ef03f603fc03020408040e0414041a04200426042c04320438043e0444044b04510457045d04630469046f0475047b04810487048d04930499049f04a504ab04b104b704bd04c304c904cf04d504db04e104e704ed04f304f904ff0405050b05110517051d05230529052f0534053a05400546054c05520558055e0564056a05700576057c05810587058d05930599059f05a505ab05b105b605bc05c205c805ce05d405da05df05e505eb05f105f705fd05020608060e0614061a061f0625062b06310637063c06420648064e06540659065f0665066b06700676067c06820687068d06930699069e06a406aa06af06b506bb06c106c606cc06d206d706dd06e306e806ee06f406f906ff0605070a07100715071b07210726072c07320737073d07420748074e07530759075e0764076a076f0775077a07800785078b07900796079b07a107a607ac07b207b707bd07c207c807cd07d207d807dd07e307e807ee07f307f907fe07040809080e08140819081f0824082a082f0834083a083f0845084a084f0855085a085f0865086a086f0875087a087f0885088a088f0895089a089f08a508aa08af08b408ba08bf08c408c908cf08d408d908de08e408e908ee08f308f808fe08030908090d09120918091d09220927092c09310937093c09410946094b09500955095a095f0965096a096f09740979097e09830988098d09920997099c09a109a609ab09b009b509ba09bf09c409c909ce09d309d809dd09e209e709ec09f109f609fb09ff09040a090a0e0a130a180a1d0a220a260a2b0a300a350a3a0a3f0a440a480a4d0a520a570a5c0a600a650a6a0a6f0a730a780a7d0a820a860a8b0a900a950a990a9e0aa30aa70aac0ab10ab50aba0abf0ac30ac80acd0ad10ad60adb0adf0ae40ae80aed0af20af60afb0aff0a040b080b0d0b110b160b1b0b1f0b240b280b2d0b310b360b3a0b3e0b430b470b4c0b500b550b590b5e0b620b660b6b0b6f0b740b780b7c0b810b850b890b8e0b920b970b9b0b9f0ba30ba80bac0bb00bb50bb90bbd0bc10bc60bca0bce0bd20bd70bdb0bdf0be30be80bec0bf00bf40bf80bfc0b010c050c090c0d0c110c150c190c1e0c220c260c2a0c2e0c320c360c3a0c3e0c420c460c4a0c4e0c520c560c5a0c5e0c620c660c6a0c6e0c720c760c7a0c7e0c820c860c8a0c8e0c910c950c990c9d0ca10ca50ca90cac0cb00cb40cb80cbc0cc00cc30cc70ccb0ccf0cd20cd60cda0cde0ce10ce50ce90ced0cf00cf40cf80cfb0cff0c030d060d0a0d0e0d110d150d180d1c0d200d230d270d2a0d2e0d320d350d390d3c0d400d430d470d4a0d4e0d510d550d580d5c0d5f0d620d660d690d6d0d700d740d770d7a0d7e0d810d850d880d8b0d8f0d920d950d990d9c0d9f0da20da60da90dac0db00db30db60db90dbc0dc00dc30dc60dc90dcc0dd00dd30dd60dd90ddc0ddf0de30de60de90dec0def0df20df50df80dfb0dfe0d010e040e070e0a0e0d0e100e130e160e190e1c0e1f0e220e250e280e2b0e2e0e310e340e370e3a0e3c0e3f0e420e450e480e4b0e4d0e500e530e560e590e5b0e5e0e610e640e660e690e6c0e6f0e710e740e770e790e7c0e7f0e810e840e870e890e8c0e8f0e910e940e960e990e9b0e9e0ea10ea30ea60ea80eab0ead0eb00eb20eb50eb70eba0ebc0ebf0ec10ec30ec60ec80ecb0ecd0ecf0ed20ed40ed60ed90edb0edd0ee00ee20ee40ee70ee90eeb0eee0ef00ef20ef40ef70ef90efb0efd0eff0e020f040f060f080f0a0f0c0f0e0f110f130f150f170f190f1b0f1d0f1f0f210f230f250f270f290f2b0f2d0f2f0f310f330f350f370f390f3b0f3d0f3f0f410f430f450f460f480f4a0f4c0f4e0f500f510f530f550f570f590f5a0f5c0f5e0f600f610f630f650f670f680f6a0f6c0f6d0f6f0f710f720f740f760f770f790f7a0f7c0f7d0f7f0f810f820f840f850f870f880f8a0f8b0f8d0f8e0f900f910f930f940f950f970f980f9a0f9b0f9c0f9e0f9f0fa10fa20fa30fa50fa60fa70fa80faa0fab0fac0fae0faf0fb00fb10fb30fb40fb50fb60fb70fb80fba0fbb0fbc0fbd0fbe0fbf0fc00fc20fc30fc40fc50fc60fc70fc80fc90fca0fcb0fcc0fcd0fce0fcf0fd00fd10fd20fd30fd40fd50fd50fd60fd70fd80fd90fda0fdb0fdc0fdc0fdd0fde0fdf0fe00fe00fe10fe20fe30fe30fe40fe50fe60fe60fe70fe80fe80fe90fea0fea0feb0fec0fec0fed0fed0fee0fef0fef0ff00ff00ff10ff10ff20ff20ff30ff30ff40ff40ff50ff50ff60ff60ff70ff70ff80ff80ff80ff90ff90ff90ffa0ffa0ffa0ffb0ffb0ffb0ffc0ffc0ffc0ffc0ffd0ffd0ffd0ffd0ffe0ffe0ffe0ffe0ffe0fff0fff0fff0fff0fff0fff0fff0f00100010001000100010001000100010001000100010"
+  },
+  "dispatch": [
+    {
+      "opcode": 43,
+      "address": 2147719044
+    },
+    {
+      "opcode": 44,
+      "address": 2147719080
+    }
+  ],
+  "windows": {
+    "store_sin_cos": {
+      "start": 2147719044,
+      "end": 2147719116,
+      "file_offset": 171908,
+      "raw_hex": "25e3000c022305002118400009e3000c40250500f3e5000c21206000b7fd0104000044ac25e3000c022305002118400009e3000c40250500f3e5000c00046424aefd0104000044ac",
+      "decoded_bytes": 72,
+      "complete_window": true,
+      "instructions": [
+        {
+          "address": 2147719044,
+          "bytes": "25e3000c",
+          "mnemonic": "jal",
+          "operands": "0x80038c94"
+        },
+        {
+          "address": 2147719048,
+          "bytes": "02230500",
+          "mnemonic": "srl",
+          "operands": "$a0, $a1, 0xc"
+        },
+        {
+          "address": 2147719052,
+          "bytes": "21184000",
+          "mnemonic": "move",
+          "operands": "$v1, $v0"
+        },
+        {
+          "address": 2147719056,
+          "bytes": "09e3000c",
+          "mnemonic": "jal",
+          "operands": "0x80038c24"
+        },
+        {
+          "address": 2147719060,
+          "bytes": "40250500",
+          "mnemonic": "sll",
+          "operands": "$a0, $a1, 0x15"
+        },
+        {
+          "address": 2147719064,
+          "bytes": "f3e5000c",
+          "mnemonic": "jal",
+          "operands": "0x800397cc"
+        },
+        {
+          "address": 2147719068,
+          "bytes": "21206000",
+          "mnemonic": "move",
+          "operands": "$a0, $v1"
+        },
+        {
+          "address": 2147719072,
+          "bytes": "b7fd0104",
+          "mnemonic": "bgez",
+          "operands": "$zero, 0x80038e80"
+        },
+        {
+          "address": 2147719076,
+          "bytes": "000044ac",
+          "mnemonic": "sw",
+          "operands": "$a0, ($v0)"
+        },
+        {
+          "address": 2147719080,
+          "bytes": "25e3000c",
+          "mnemonic": "jal",
+          "operands": "0x80038c94"
+        },
+        {
+          "address": 2147719084,
+          "bytes": "02230500",
+          "mnemonic": "srl",
+          "operands": "$a0, $a1, 0xc"
+        },
+        {
+          "address": 2147719088,
+          "bytes": "21184000",
+          "mnemonic": "move",
+          "operands": "$v1, $v0"
+        },
+        {
+          "address": 2147719092,
+          "bytes": "09e3000c",
+          "mnemonic": "jal",
+          "operands": "0x80038c24"
+        },
+        {
+          "address": 2147719096,
+          "bytes": "40250500",
+          "mnemonic": "sll",
+          "operands": "$a0, $a1, 0x15"
+        },
+        {
+          "address": 2147719100,
+          "bytes": "f3e5000c",
+          "mnemonic": "jal",
+          "operands": "0x800397cc"
+        },
+        {
+          "address": 2147719104,
+          "bytes": "00046424",
+          "mnemonic": "addiu",
+          "operands": "$a0, $v1, 0x400"
+        },
+        {
+          "address": 2147719108,
+          "bytes": "aefd0104",
+          "mnemonic": "bgez",
+          "operands": "$zero, 0x80038e80"
+        },
+        {
+          "address": 2147719112,
+          "bytes": "000044ac",
+          "mnemonic": "sw",
+          "operands": "$a0, ($v0)"
+        }
+      ]
+    },
+    "integer_sine": {
+      "start": 2147719116,
+      "end": 2147719208,
+      "file_offset": 171980,
+      "raw_hex": "0680063c1cc9c624003d04000900e004403807000400e004023d07002138e6000800e0030000e4842338c7000800e0030010e4840500e004023d07002138e6000000e4840800e003222004002338c7000010e4840800e00322200400",
+      "decoded_bytes": 92,
+      "complete_window": true,
+      "instructions": [
+        {
+          "address": 2147719116,
+          "bytes": "0680063c",
+          "mnemonic": "lui",
+          "operands": "$a2, 0x8006"
+        },
+        {
+          "address": 2147719120,
+          "bytes": "1cc9c624",
+          "mnemonic": "addiu",
+          "operands": "$a2, $a2, -0x36e4"
+        },
+        {
+          "address": 2147719124,
+          "bytes": "003d0400",
+          "mnemonic": "sll",
+          "operands": "$a3, $a0, 0x14"
+        },
+        {
+          "address": 2147719128,
+          "bytes": "0900e004",
+          "mnemonic": "bltz",
+          "operands": "$a3, 0x80039800"
+        },
+        {
+          "address": 2147719132,
+          "bytes": "40380700",
+          "mnemonic": "sll",
+          "operands": "$a3, $a3, 1"
+        },
+        {
+          "address": 2147719136,
+          "bytes": "0400e004",
+          "mnemonic": "bltz",
+          "operands": "$a3, 0x800397f4"
+        },
+        {
+          "address": 2147719140,
+          "bytes": "023d0700",
+          "mnemonic": "srl",
+          "operands": "$a3, $a3, 0x14"
+        },
+        {
+          "address": 2147719144,
+          "bytes": "2138e600",
+          "mnemonic": "addu",
+          "operands": "$a3, $a3, $a2"
+        },
+        {
+          "address": 2147719148,
+          "bytes": "0800e003",
+          "mnemonic": "jr",
+          "operands": "$ra"
+        },
+        {
+          "address": 2147719152,
+          "bytes": "0000e484",
+          "mnemonic": "lh",
+          "operands": "$a0, ($a3)"
+        },
+        {
+          "address": 2147719156,
+          "bytes": "2338c700",
+          "mnemonic": "subu",
+          "operands": "$a3, $a2, $a3"
+        },
+        {
+          "address": 2147719160,
+          "bytes": "0800e003",
+          "mnemonic": "jr",
+          "operands": "$ra"
+        },
+        {
+          "address": 2147719164,
+          "bytes": "0010e484",
+          "mnemonic": "lh",
+          "operands": "$a0, 0x1000($a3)"
+        },
+        {
+          "address": 2147719168,
+          "bytes": "0500e004",
+          "mnemonic": "bltz",
+          "operands": "$a3, 0x80039818"
+        },
+        {
+          "address": 2147719172,
+          "bytes": "023d0700",
+          "mnemonic": "srl",
+          "operands": "$a3, $a3, 0x14"
+        },
+        {
+          "address": 2147719176,
+          "bytes": "2138e600",
+          "mnemonic": "addu",
+          "operands": "$a3, $a3, $a2"
+        },
+        {
+          "address": 2147719180,
+          "bytes": "0000e484",
+          "mnemonic": "lh",
+          "operands": "$a0, ($a3)"
+        },
+        {
+          "address": 2147719184,
+          "bytes": "0800e003",
+          "mnemonic": "jr",
+          "operands": "$ra"
+        },
+        {
+          "address": 2147719188,
+          "bytes": "22200400",
+          "mnemonic": "neg",
+          "operands": "$a0, $a0"
+        },
+        {
+          "address": 2147719192,
+          "bytes": "2338c700",
+          "mnemonic": "subu",
+          "operands": "$a3, $a2, $a3"
+        },
+        {
+          "address": 2147719196,
+          "bytes": "0010e484",
+          "mnemonic": "lh",
+          "operands": "$a0, 0x1000($a3)"
+        },
+        {
+          "address": 2147719200,
+          "bytes": "0800e003",
+          "mnemonic": "jr",
+          "operands": "$ra"
+        },
+        {
+          "address": 2147719204,
+          "bytes": "22200400",
+          "mnemonic": "neg",
+          "operands": "$a0, $a0"
+        }
+      ]
+    }
+  },
+  "semantics": [
+    "Source upper operand is read before lower destination address.",
+    "Angle wraps modulo4096; quarter-wave amplitude is4096.",
+    "Cosine adds1024 with32bit wrapping then uses original sine routine."
+  ],
+  "limitations": [
+    "Offline evidence, not REA provider Evidence.",
+    "Fixture replay does not model PS1 timing or gameplay reachability."
+  ]
+}
