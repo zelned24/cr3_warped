@@ -1,4 +1,4 @@
-# Crash Bandicoot 3: Warped â€” Old Nintendo 3DS XL
+# Crash Bandicoot 3: Warped Old Nintendo 3DS XL
 
 Target: SCUS_942.44; native ARM11/PICA200 port. Main starts original title archive3C and executes its scripts; opcode48 and presentation remain unfinished. Gameplay cutover, physical O3DS and105% acceptance remain incomplete.
 
